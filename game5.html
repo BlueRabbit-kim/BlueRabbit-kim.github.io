@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>3D 타자연습 게임</title>
+  <style>
+    html, body { height: 100%; margin: 0; padding: 0; background: #1a1a1a; font-family: 'Arial', sans-serif; }
+    
+    #gameContainer { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+    
+    /* 메뉴 스타일 */
+    #menu { 
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
+      background: rgba(0, 0, 0, 0.9); color: white; 
+      display: flex; flex-direction: column; justify-content: center; align-items: center; 
+      z-index: 100; font-size: 1.2em;
+    }
+    #menu h1 { font-size: 3em; margin-bottom: 40px; color: #ff6b6b; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+    #menu p { font-size: 1.1em; margin-bottom: 30px; color: #ccc; }
+    .difficulty-btn { 
+      margin: 10px; padding: 15px 30px; font-size: 1.2em; 
+      background: linear-gradient(45deg, #ff6b6b, #4ecdc4); 
+      border: none; border-radius: 25px; color: white; 
+      cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+    .difficulty-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
+    
+    /* HUD 스타일 */
+    #hud { 
+      position: fixed; top: 20px; left: 20px; right: 20px; 
+      display: flex; justify-content: space-between; align-items: center; 
+      z-index: 10; color: white; font-size: 1.3em; font-weight: bold;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+    }
+    #score { color: #4ecdc4; }
+    #lives { color: #ff6b6b; font-size: 1.5em; }
+    #kills { color: #ffd93d; }
+    
+    /* 입력창 스타일 */
+    #inputArea { 
+      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); 
+      z-index: 10; text-align: center;
+    }
+    #currentInput { 
+      background: rgba(0, 0, 0, 0.8); color: white; 
+      border: 2px solid #4ecdc4; border-radius: 15px; 
+      padding: 15px 25px; font-size: 1.4em; 
+      text-align: center; min-width: 300px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    }
+    #inputLabel { 
+      color: #4ecdc4; font-size: 1.1em; margin-bottom: 10px; 
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+    }
+    
+    /* 게임 오버 화면 */
+    #gameOver { 
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
+      background: rgba(0, 0, 0, 0.9); color: white; 
+      display: none; flex-direction: column; justify-content: center; align-items: center; 
+      z-index: 100; font-size: 1.3em;
+    }
+    #gameOver h2 { font-size: 3em; margin-bottom: 30px; color: #ff6b6b; }
+    #finalStats { margin-bottom: 30px; text-align: center; }
+    #restartBtn { 
+      padding: 15px 40px; font-size: 1.2em; 
+      background: linear-gradient(45deg, #4ecdc4, #44a08d); 
+      border: none; border-radius: 25px; color: white; 
+      cursor: pointer; transition: all 0.3s;
+    }
+    #restartBtn:hover { transform: translateY(-2px); }
+    
+    /* 조작법 안내 */
+    #instructions { 
+      position: fixed; bottom: 10px; left: 10px; 
+      color: rgba(255, 255, 255, 0.7); font-size: 0.9em; 
+      z-index: 5; pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <!-- 메뉴 -->
+    <div id="menu">
+      <h1>🧟‍♂️ 타자연습 게임</h1>
+      <p>다가오는 좀비들의 단어를 입력해서 제거하세요!</p>
+      <button class="difficulty-btn" onclick="startGame('easy')">쉬움</button>
+      <button class="difficulty-btn" onclick="startGame('normal')">보통</button>
+      <button class="difficulty-btn" onclick="startGame('hard')">어려움</button>
+    </div>
+    
+    <!-- HUD -->
+    <div id="hud" style="display: none;">
+      <div id="score">점수: 0</div>
+      <div id="lives">❤️❤️❤️❤️❤️</div>
+      <div id="kills">제거: 0</div>
+    </div>
+    
+    <!-- 입력창 -->
+    <div id="inputArea" style="display: none;">
+      <div id="inputLabel">단어를 입력하세요:</div>
+      <input type="text" id="currentInput" placeholder="여기에 입력..." autocomplete="off">
+    </div>
+    
+    <!-- 게임 오버 -->
+    <div id="gameOver">
+      <h2>게임 오버!</h2>
+      <div id="finalStats">
+        <div>최종 점수: <span id="finalScore">0</span></div>
+        <div>제거한 좀비: <span id="finalKills">0</span>마리</div>
+        <div>정확도: <span id="accuracy">0</span>%</div>
+      </div>
+      <button id="restartBtn" onclick="restartGame()">다시 시작</button>
+    </div>
+    
+    <!-- 조작법 -->
+    <div id="instructions">
+      키보드로 단어를 입력하여 좀비를 제거하세요!
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.min.js"></script>
+  <script>
+    // 게임 변수들
+    let scene, camera, renderer, player, enemies = [];
+    let gameState = 'menu'; // 'menu', 'playing', 'gameOver'
+    let difficulty = 'normal';
+    let score = 0, lives = 5, kills = 0, totalTyped = 0, correctTyped = 0;
+    let currentInput = '';
+    let enemySpawnTimer = 0;
+    let gameStartTime = 0;
+    
+    // 난이도별 설정
+    const difficultySettings = {
+      easy: {
+        wordLength: [2, 3],
+        spawnInterval: 3000,
+        enemySpeed: 0.02,
+        words: ['사과', '바나나', '고양이', '강아지', '책상', '의자', '컵', '물', '빵', '우유', '꽃', '나무', '집', '문', '창문', '방', '침대', '옷', '신발', '모자', '장갑', '시계', '전화', '텔레비전', '라디오', '책', '펜', '연필', '지우개', '가방']
+      },
+      normal: {
+        wordLength: [3, 4],
+        spawnInterval: 2000,
+        enemySpeed: 0.03,
+        words: ['컴퓨터', '키보드', '햄버거', '피자', '치킨', '라면', '김치', '된장', '고추장', '마요네즈', '케첩', '소금', '설탕', '후추', '식초', '간장', '참기름', '들기름', '올리브유', '버터', '치즈', '요구르트', '아이스크림', '케이크', '쿠키', '사탕', '초콜릿', '과자', '음료수', '주스']
+      },
+      hard: {
+        wordLength: [4, 6],
+        spawnInterval: 1500,
+        enemySpeed: 0.04,
+        words: ['타자연습', '프로그래밍', '인공지능', '알고리즘', '데이터베이스', '네트워크', '보안시스템', '클라우드컴퓨팅', '머신러닝', '딥러닝', '블록체인', '가상현실', '증강현실', '사물인터넷', '빅데이터', '사이버보안', '디지털트랜스포메이션', '사용자경험', '인터페이스', '플랫폼', '애플리케이션', '소프트웨어', '하드웨어', '운영체제', '프로그래밍언어', '개발환경', '버전관리', '테스트코드', '배포시스템', '모니터링']
+      }
+    };
+    
+    // Three.js 초기화
+    function initThreeJS() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x2c3e50);
+      
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 15, 20);
+      camera.lookAt(0, 0, 0);
+      
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      document.getElementById('gameContainer').appendChild(renderer.domElement);
+      
+      // 조명 설정
+      const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+      scene.add(ambientLight);
+      
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(10, 20, 10);
+      directionalLight.castShadow = true;
+      directionalLight.shadow.mapSize.width = 2048;
+      directionalLight.shadow.mapSize.height = 2048;
+      scene.add(directionalLight);
+      
+      // 바닥 생성
+      const groundGeometry = new THREE.CircleGeometry(30, 32);
+      const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x34495e });
+      const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      scene.add(ground);
+      
+      // 플레이어 생성 (중앙에 고정)
+      const playerGeometry = new THREE.CylinderGeometry(1, 1, 3, 8);
+      const playerMaterial = new THREE.MeshLambertMaterial({ color: 0x3498db });
+      player = new THREE.Mesh(playerGeometry, playerMaterial);
+      player.position.set(0, 1.5, 0);
+      player.castShadow = true;
+      scene.add(player);
+      
+      // 플레이어 위에 표시
+      const playerTopGeometry = new THREE.SphereGeometry(0.8, 8, 8);
+      const playerTopMaterial = new THREE.MeshLambertMaterial({ color: 0xe74c3c });
+      const playerTop = new THREE.Mesh(playerTopGeometry, playerTopMaterial);
+      playerTop.position.set(0, 2.5, 0);
+      playerTop.castShadow = true;
+      player.add(playerTop);
+    }
+    
+    // 단어 텍스처 생성
+    function createWordTexture(word) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 64;
+      const context = canvas.getContext('2d');
+      
+      // 배경
+      context.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // 테두리
+      context.strokeStyle = '#4ecdc4';
+      context.lineWidth = 3;
+      context.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+      
+      // 텍스트
+      context.fillStyle = '#ffffff';
+      context.font = 'bold 24px Arial';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText(word, canvas.width / 2, canvas.height / 2);
+      
+      const texture = new THREE.CanvasTexture(canvas);
+      return texture;
+    }
+    
+    // 적 생성
+    function spawnEnemy() {
+      const settings = difficultySettings[difficulty];
+      const word = settings.words[Math.floor(Math.random() * settings.words.length)];
+      
+      // 적 메시 생성
+      const enemyGeometry = new THREE.CylinderGeometry(0.8, 0.8, 2, 6);
+      const enemyMaterial = new THREE.MeshLambertMaterial({ color: 0x8e44ad });
+      const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
+      
+      // 랜덤 위치 (원 밖에서)
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 25 + Math.random() * 10;
+      enemy.position.set(
+        Math.cos(angle) * distance,
+        1,
+        Math.sin(angle) * distance
+      );
+      
+      enemy.castShadow = true;
+      scene.add(enemy);
+      
+      // 단어 라벨 생성
+      const wordTexture = createWordTexture(word);
+      const wordMaterial = new THREE.SpriteMaterial({ map: wordTexture, transparent: true });
+      const wordSprite = new THREE.Sprite(wordMaterial);
+      wordSprite.position.set(0, 3, 0);
+      wordSprite.scale.set(4, 1, 1);
+      enemy.add(wordSprite);
+      
+      // 적 데이터 저장
+      enemy.userData = {
+        word: word,
+        speed: settings.enemySpeed,
+        angle: angle,
+        distance: distance
+      };
+      
+      enemies.push(enemy);
+    }
+    
+    // 적 이동
+    function updateEnemies() {
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const enemy = enemies[i];
+        const data = enemy.userData;
+        
+        // 플레이어 방향으로 이동
+        const dx = -enemy.position.x;
+        const dz = -enemy.position.z;
+        const distance = Math.sqrt(dx * dx + dz * dz);
+        
+        if (distance > 0) {
+          enemy.position.x += (dx / distance) * data.speed;
+          enemy.position.z += (dz / distance) * data.speed;
+        }
+        
+        // 플레이어에 도달했는지 확인
+        if (distance < 2) {
+          // 생명 감소
+          lives--;
+          updateLivesDisplay();
+          
+          // 적 제거
+          scene.remove(enemy);
+          enemies.splice(i, 1);
+          
+          // 게임 오버 확인
+          if (lives <= 0) {
+            endGame();
+            return;
+          }
+        }
+      }
+    }
+    
+    // 입력 처리
+    function handleInput() {
+      const inputField = document.getElementById('currentInput');
+      currentInput = inputField.value;
+      
+      // 적들과 매칭 확인
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const enemy = enemies[i];
+        if (enemy.userData.word === currentInput) {
+          // 적 제거
+          scene.remove(enemy);
+          enemies.splice(i, 1);
+          
+          // 점수 증가
+          score += 10;
+          kills++;
+          correctTyped++;
+          totalTyped++;
+          
+          updateHUD();
+          
+          // 입력창 초기화
+          inputField.value = '';
+          currentInput = '';
+          break;
+        }
+      }
+    }
+    
+    // HUD 업데이트
+    function updateHUD() {
+      document.getElementById('score').textContent = `점수: ${score}`;
+      document.getElementById('kills').textContent = `제거: ${kills}`;
+    }
+    
+    function updateLivesDisplay() {
+      let hearts = '';
+      for (let i = 0; i < 5; i++) {
+        hearts += i < lives ? '❤️' : '🤍';
+      }
+      document.getElementById('lives').textContent = hearts;
+    }
+    
+    // 게임 시작
+    function startGame(diff) {
+      difficulty = diff;
+      gameState = 'playing';
+      score = 0;
+      lives = 5;
+      kills = 0;
+      totalTyped = 0;
+      correctTyped = 0;
+      enemySpawnTimer = 0;
+      gameStartTime = Date.now();
+      
+      // 기존 적들 제거
+      enemies.forEach(enemy => scene.remove(enemy));
+      enemies = [];
+      
+      // UI 전환
+      document.getElementById('menu').style.display = 'none';
+      document.getElementById('hud').style.display = 'flex';
+      document.getElementById('inputArea').style.display = 'block';
+      document.getElementById('gameOver').style.display = 'none';
+      
+      updateHUD();
+      updateLivesDisplay();
+      
+      // 입력창 포커스
+      document.getElementById('currentInput').focus();
+    }
+    
+    // 게임 종료
+    function endGame() {
+      gameState = 'gameOver';
+      
+      // 최종 통계 계산
+      const accuracy = totalTyped > 0 ? Math.round((correctTyped / totalTyped) * 100) : 0;
+      
+      document.getElementById('finalScore').textContent = score;
+      document.getElementById('finalKills').textContent = kills;
+      document.getElementById('accuracy').textContent = accuracy;
+      
+      // UI 전환
+      document.getElementById('hud').style.display = 'none';
+      document.getElementById('inputArea').style.display = 'none';
+      document.getElementById('gameOver').style.display = 'flex';
+    }
+    
+    // 게임 재시작
+    function restartGame() {
+      gameState = 'menu';
+      document.getElementById('menu').style.display = 'flex';
+      document.getElementById('gameOver').style.display = 'none';
+    }
+    
+    // 애니메이션 루프
+    function animate() {
+      requestAnimationFrame(animate);
+      
+      if (gameState === 'playing') {
+        // 적 생성
+        enemySpawnTimer += 16; // 60fps 기준
+        if (enemySpawnTimer >= difficultySettings[difficulty].spawnInterval) {
+          spawnEnemy();
+          enemySpawnTimer = 0;
+        }
+        
+        // 적 이동
+        updateEnemies();
+        
+        // 플레이어 회전 (시각적 효과)
+        player.rotation.y += 0.01;
+      }
+      
+      renderer.render(scene, camera);
+    }
+    
+    // 이벤트 리스너
+    document.getElementById('currentInput').addEventListener('input', handleInput);
+    document.getElementById('currentInput').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        handleInput();
+        this.value = '';
+        currentInput = '';
+      }
+    });
+    
+    // 창 크기 조정
+    window.addEventListener('resize', function() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+    
+    // 초기화 및 시작
+    initThreeJS();
+    animate();
+  </script>
+</body>
+</html>
